@@ -1,39 +1,47 @@
-# cronwatcher configuration example
-
-log_level: INFO
-state_file: /var/lib/cronwatcher/state.json
-check_interval: 60
+# cronwatcher example configuration
+# Copy this file to cronwatcher.yaml and adjust as needed.
 
 alerts:
-  email: ops@example.com
-  slack_webhook: https://hooks.slack.com/services/XXX/YYY/ZZZ
-  pagerduty_key: null
+  email:
+    enabled: false
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    from_address: cronwatcher@example.com
+    to_addresses:
+      - ops@example.com
+    username: cronwatcher@example.com
+    password: "s3cr3t"
+
+  slack:
+    enabled: false
+    webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+
+  pagerduty:
+    enabled: false
+    routing_key: your-pagerduty-routing-key
 
 jobs:
-  - name: daily-backup
-    schedule: "0 2 * * *"
-    command: /usr/local/bin/backup.sh
-    timeout: 600
-    alert_on_failure: true
-    alert_on_missed: true
-    notify_channels:
-      - email
-      - slack
+  # --- minimal job (only required fields) ---
+  - name: heartbeat
+    schedule: "* * * * *"   # every minute
+    command: echo ok
 
-  - name: hourly-cleanup
-    schedule: "0 * * * *"
-    command: /usr/local/bin/cleanup.sh
-    timeout: 120
-    alert_on_failure: true
-    alert_on_missed: false
-    notify_channels:
-      - slack
+  # --- job with all optional fields ---
+  - name: daily-backup
+    schedule: "0 2 * * *"   # every day at 02:00
+    command: /usr/local/bin/backup.sh
+    timeout: 3600            # seconds; alert if job runs longer
+    grace_period: 300        # seconds after expected start before alerting
+    notify_on_failure: true
+    notify_on_miss: true
+    tags:
+      - production
+      - database
 
   - name: weekly-report
-    schedule: "0 9 * * 1"
-    command: /usr/local/bin/report.sh
-    timeout: 300
-    alert_on_failure: true
-    alert_on_missed: true
-    notify_channels:
-      - email
+    schedule: "0 9 * * 1"   # every Monday at 09:00
+    command: /opt/reports/weekly.py
+    timeout: 1800
+    grace_period: 600
+    notify_on_failure: true
+    notify_on_miss: false
