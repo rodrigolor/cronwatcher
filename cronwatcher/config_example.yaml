@@ -1,0 +1,39 @@
+# cronwatcher configuration example
+
+log_level: INFO
+state_file: /var/lib/cronwatcher/state.json
+check_interval: 60
+
+alerts:
+  email: ops@example.com
+  slack_webhook: https://hooks.slack.com/services/XXX/YYY/ZZZ
+  pagerduty_key: null
+
+jobs:
+  - name: daily-backup
+    schedule: "0 2 * * *"
+    command: /usr/local/bin/backup.sh
+    timeout: 600
+    alert_on_failure: true
+    alert_on_missed: true
+    notify_channels:
+      - email
+      - slack
+
+  - name: hourly-cleanup
+    schedule: "0 * * * *"
+    command: /usr/local/bin/cleanup.sh
+    timeout: 120
+    alert_on_failure: true
+    alert_on_missed: false
+    notify_channels:
+      - slack
+
+  - name: weekly-report
+    schedule: "0 9 * * 1"
+    command: /usr/local/bin/report.sh
+    timeout: 300
+    alert_on_failure: true
+    alert_on_missed: true
+    notify_channels:
+      - email

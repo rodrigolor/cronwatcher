@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "cronwatcher"
+version = "0.1.0"
+description = "Lightweight daemon that monitors cron job execution and sends alerts on failures or missed schedules."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "cronwatcher contributors" }
+]
+keywords = ["cron", "monitoring", "alerting", "daemon"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+]
+
+[project.scripts]
+cronwatcher = "cronwatcher.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cronwatcher*"]
