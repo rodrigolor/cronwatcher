@@ -1,72 +1,87 @@
-"""Persistent execution history for cron jobs."""
-
+"""Persistent execution history store."""
 from __future__ import annotations
 
-import json
-import logging
+import csv
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
 
-logger = logging.getLogger(__name__)
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 @dataclass
 class ExecutionRecord:
     job_name: str
-    timestamp: str  # ISO-8601
-    success: bool
+    timestamp: datetime
+    status: str  # "success" | "failure"
     exit_code: Optional[int] = None
+    duration_seconds: Optional[float] = None
     message: Optional[str] = None
 
-    @staticmethod
-    def now(job_name: str, success: bool, exit_code: Optional[int] = None, message: Optional[str] = None) -> "ExecutionRecord":
-        ts = datetime.now(tz=timezone.utc).isoformat()
-        return ExecutionRecord(job_name=job_name, timestamp=ts, success=success, exit_code=exit_code, message=message)
+
+_FIELDS = ["job_name", "timestamp", "status", "exit_code", "duration_seconds", "message"]
 
 
 class HistoryStore:
-    """Append-only JSON-lines store for job execution history."""
+    def __init__(self, directory: str) -> None:
+        self._dir = directory
+        os.makedirs(directory, exist_ok=True)
 
-    def __init__(self, path: str | Path) -> None:
-        self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+    def _path(self, job_name: str) -> str:
+        safe = job_name.replace("/", "_").replace(" ", "_")
+        return os.path.join(self._dir, f"{safe}.csv")
 
-    def record(self, entry: ExecutionRecord) -> None:
-        """Append a single execution record to the store."""
-        try:
-            with self._path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(asdict(entry)) + "\n")
-        except OSError as exc:
-            logger.error("Failed to write history record: %s", exc)
+    def record(self, rec: ExecutionRecord) -> None:
+        path = self._path(rec.job_name)
+        write_header = not os.path.exists(path)
+        with open(path, "a", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=_FIELDS)
+            if write_header:
+                writer.writeheader()
+            writer.writerow({
+                "job_name": rec.job_name,
+                "timestamp": rec.timestamp.isoformat(),
+                "status": rec.status,
+                "exit_code": "" if rec.exit_code is None else rec.exit_code,
+                "duration_seconds": "" if rec.duration_seconds is None else rec.duration_seconds,
+                "message": rec.message or "",
+            })
 
     def read_all(self) -> List[ExecutionRecord]:
-        """Return all records from the store, oldest first."""
         records: List[ExecutionRecord] = []
-        if not self._path.exists():
-            return records
-        try:
-            with self._path.open("r", encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line:
-                        records.append(ExecutionRecord(**json.loads(line)))
-        except (OSError, json.JSONDecodeError, TypeError) as exc:
-            logger.error("Failed to read history: %s", exc)
+        for fname in os.listdir(self._dir):
+            if fname.endswith(".csv"):
+                job = fname[:-4]
+                records.extend(self._read_file(self._path(job)))
         return records
 
     def read_for_job(self, job_name: str) -> List[ExecutionRecord]:
-        """Return all records for a specific job."""
-        return [r for r in self.read_all() if r.job_name == job_name]
+        path = self._path(job_name)
+        if not os.path.exists(path):
+            return []
+        return self._read_file(path)
 
-    def last_success(self, job_name: str) -> Optional[ExecutionRecord]:
-        """Return the most recent successful execution for a job, or None."""
-        records = [r for r in self.read_for_job(job_name) if r.success]
-        return records[-1] if records else None
+    def list_jobs(self) -> List[str]:
+        return [
+            fname[:-4]
+            for fname in os.listdir(self._dir)
+            if fname.endswith(".csv")
+        ]
 
-    def clear(self) -> None:
-        """Remove all history (useful for testing)."""
-        if self._path.exists():
-            self._path.unlink()
+    @staticmethod
+    def _read_file(path: str) -> List[ExecutionRecord]:
+        records: List[ExecutionRecord] = []
+        with open(path, newline="") as fh:
+            for row in csv.DictReader(fh):
+                records.append(ExecutionRecord(
+                    job_name=row["job_name"],
+                    timestamp=datetime.fromisoformat(row["timestamp"]),
+                    status=row["status"],
+                    exit_code=int(row["exit_code"]) if row["exit_code"] else None,
+                    duration_seconds=float(row["duration_seconds"]) if row["duration_seconds"] else None,
+                    message=row["message"] or None,
+                ))
+        return records
