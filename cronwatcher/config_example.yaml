@@ -1,47 +1,32 @@
 # cronwatcher example configuration
-# Copy this file to cronwatcher.yaml and adjust as needed.
 
-alerts:
-  email:
-    enabled: false
-    smtp_host: smtp.example.com
-    smtp_port: 587
-    from_address: cronwatcher@example.com
-    to_addresses:
-      - ops@example.com
-    username: cronwatcher@example.com
-    password: "s3cr3t"
+check_interval: 60  # seconds between missed-job checks
 
-  slack:
-    enabled: false
-    webhook_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
-
-  pagerduty:
-    enabled: false
-    routing_key: your-pagerduty-routing-key
+heartbeat:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8765
+  # Cron jobs call: GET http://<host>:<port>/ping/<job_name>
 
 jobs:
-  # --- minimal job (only required fields) ---
-  - name: heartbeat
-    schedule: "* * * * *"   # every minute
-    command: echo ok
-
-  # --- job with all optional fields ---
-  - name: daily-backup
-    schedule: "0 2 * * *"   # every day at 02:00
+  - name: daily_backup
+    schedule: "0 2 * * *"  # 02:00 every day
+    grace_seconds: 300
     command: /usr/local/bin/backup.sh
-    timeout: 3600            # seconds; alert if job runs longer
-    grace_period: 300        # seconds after expected start before alerting
-    notify_on_failure: true
-    notify_on_miss: true
-    tags:
-      - production
-      - database
 
-  - name: weekly-report
-    schedule: "0 9 * * 1"   # every Monday at 09:00
-    command: /opt/reports/weekly.py
-    timeout: 1800
-    grace_period: 600
-    notify_on_failure: true
-    notify_on_miss: false
+  - name: hourly_sync
+    schedule: "0 * * * *"
+    grace_seconds: 120
+
+  - name: every_minute_health
+    schedule: "* * * * *"
+    grace_seconds: 90
+
+alert:
+  enabled: false
+  smtp_host: smtp.example.com
+  smtp_port: 587
+  from_addr: cronwatcher@example.com
+  recipients:
+    - ops@example.com
+    - oncall@example.com

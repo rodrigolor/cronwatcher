@@ -1,77 +1,82 @@
-"""Configuration loading and validation for cronwatcher."""
+"""Configuration models for cronwatcher."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import List, Optional
 
 import yaml
 
 
 @dataclass
-class JobConfig:
-    name: str
-    schedule: str          # cron expression, e.g. "*/5 * * * *"
-    grace_seconds: int = 60
+class AlertConfig:
+    enabled: bool = False
+    smtp_host: str = "localhost"
+    smtp_port: int = 25
+    from_addr: str = ""
+    recipients: List[str] = field(default_factory=list)
 
 
 @dataclass
-class AlertConfig:
-    enabled: bool = True
-    log_level: str = "WARNING"
-    email_recipients: list[str] = field(default_factory=list)
-    smtp_host: str = "localhost"
-    smtp_port: int = 25
-    smtp_from: str = "cronwatcher@localhost"
+class JobConfig:
+    name: str
+    schedule: str
+    grace_seconds: int = 60
+    command: Optional[str] = None
+
+
+@dataclass
+class HeartbeatConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8765
 
 
 @dataclass
 class CronWatcherConfig:
-    jobs: list[JobConfig]
-    alerts: AlertConfig = field(default_factory=AlertConfig)
-    poll_interval: float = 30.0
+    jobs: List[JobConfig] = field(default_factory=list)
+    alert: AlertConfig = field(default_factory=AlertConfig)
+    heartbeat: HeartbeatConfig = field(default_factory=HeartbeatConfig)
+    check_interval: int = 60
 
 
-def _parse_alert(raw: dict[str, Any]) -> AlertConfig:
+def _parse_alert(raw: dict) -> AlertConfig:
     return AlertConfig(
-        enabled=bool(raw.get("enabled", True)),
-        log_level=str(raw.get("log_level", "WARNING")),
-        email_recipients=list(raw.get("email_recipients", [])),
-        smtp_host=str(raw.get("smtp_host", "localhost")),
-        smtp_port=int(raw.get("smtp_port", 25)),
-        smtp_from=str(raw.get("smtp_from", "cronwatcher@localhost")),
+        enabled=raw.get("enabled", False),
+        smtp_host=raw.get("smtp_host", "localhost"),
+        smtp_port=raw.get("smtp_port", 25),
+        from_addr=raw.get("from_addr", ""),
+        recipients=raw.get("recipients", []),
     )
 
 
-def _parse_job(raw: dict[str, Any]) -> JobConfig:
-    if "name" not in raw:
-        raise ValueError("Job entry missing required field 'name'.")
-    if "schedule" not in raw:
-        raise ValueError(f"Job '{raw['name']}' missing required field 'schedule'.")
+def _parse_heartbeat(raw: dict) -> HeartbeatConfig:
+    return HeartbeatConfig(
+        enabled=raw.get("enabled", False),
+        host=raw.get("host", "0.0.0.0"),
+        port=raw.get("port", 8765),
+    )
+
+
+def _parse_job(raw: dict) -> JobConfig:
     return JobConfig(
-        name=str(raw["name"]),
-        schedule=str(raw["schedule"]),
-        grace_seconds=int(raw.get("grace_seconds", 60)),
+        name=raw["name"],
+        schedule=raw["schedule"],
+        grace_seconds=raw.get("grace_seconds", 60),
+        command=raw.get("command"),
     )
 
 
 def load_config(path: str | Path) -> CronWatcherConfig:
-    """Load and parse a YAML configuration file."""
-    config_path = Path(path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with config_path.open() as fh:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+    with p.open() as fh:
         raw = yaml.safe_load(fh) or {}
-
-    jobs_raw = raw.get("jobs", [])
-    if not isinstance(jobs_raw, list):
-        raise ValueError("'jobs' must be a list.")
-
-    jobs = [_parse_job(j) for j in jobs_raw]
-    alerts = _parse_alert(raw.get("alerts", {}))
-    poll_interval = float(raw.get("poll_interval", 30.0))
-
-    return CronWatcherConfig(jobs=jobs, alerts=alerts, poll_interval=poll_interval)
+    return CronWatcherConfig(
+        jobs=[_parse_job(j) for j in raw.get("jobs", [])],
+        alert=_parse_alert(raw.get("alert", {})),
+        heartbeat=_parse_heartbeat(raw.get("heartbeat", {})),
+        check_interval=raw.get("check_interval", 60),
+    )
