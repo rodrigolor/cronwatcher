@@ -1,7 +1,9 @@
-"""Configuration loader for cronwatcher."""
+"""Configuration loading for cronwatcher."""
 
-import os
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional
 
 import yaml
@@ -11,67 +13,67 @@ import yaml
 class JobConfig:
     name: str
     schedule: str
-    command: str
-    timeout: int = 300
-    alert_on_failure: bool = True
-    alert_on_missed: bool = True
-    notify_channels: List[str] = field(default_factory=list)
+    grace_period: int = 60  # seconds
+    command: Optional[str] = None
 
 
 @dataclass
 class AlertConfig:
-    email: Optional[str] = None
-    slack_webhook: Optional[str] = None
-    pagerduty_key: Optional[str] = None
+    enabled: bool = False
+    recipients: List[str] = field(default_factory=list)
+    from_address: str = "cronwatcher@localhost"
+    smtp_host: str = "localhost"
+    smtp_port: int = 25
+    smtp_tls: bool = False
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
 
 
 @dataclass
 class CronWatcherConfig:
-    jobs: List[JobConfig]
-    alerts: AlertConfig
+    jobs: List[JobConfig] = field(default_factory=list)
+    alerts: AlertConfig = field(default_factory=AlertConfig)
+    check_interval: int = 60  # seconds
     log_level: str = "INFO"
-    state_file: str = "/var/lib/cronwatcher/state.json"
-    check_interval: int = 60
 
 
-def load_config(path: str) -> CronWatcherConfig:
-    """Load and validate configuration from a YAML file."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Config file not found: {path}")
-
-    with open(path, "r") as f:
-        raw = yaml.safe_load(f)
-
-    if not isinstance(raw, dict):
-        raise ValueError("Invalid config: root must be a mapping")
-
-    alert_raw = raw.get("alerts", {})
-    alerts = AlertConfig(
-        email=alert_raw.get("email"),
-        slack_webhook=alert_raw.get("slack_webhook"),
-        pagerduty_key=alert_raw.get("pagerduty_key"),
+def _parse_alert(raw: dict) -> AlertConfig:
+    return AlertConfig(
+        enabled=raw.get("enabled", False),
+        recipients=raw.get("recipients", []),
+        from_address=raw.get("from_address", "cronwatcher@localhost"),
+        smtp_host=raw.get("smtp_host", "localhost"),
+        smtp_port=int(raw.get("smtp_port", 25)),
+        smtp_tls=raw.get("smtp_tls", False),
+        smtp_user=raw.get("smtp_user"),
+        smtp_password=raw.get("smtp_password"),
     )
 
-    jobs = []
-    for job_raw in raw.get("jobs", []):
-        if "name" not in job_raw or "schedule" not in job_raw or "command" not in job_raw:
-            raise ValueError(f"Job missing required fields: {job_raw}")
-        jobs.append(
-            JobConfig(
-                name=job_raw["name"],
-                schedule=job_raw["schedule"],
-                command=job_raw["command"],
-                timeout=job_raw.get("timeout", 300),
-                alert_on_failure=job_raw.get("alert_on_failure", True),
-                alert_on_missed=job_raw.get("alert_on_missed", True),
-                notify_channels=job_raw.get("notify_channels", []),
-            )
-        )
+
+def _parse_job(raw: dict) -> JobConfig:
+    return JobConfig(
+        name=raw["name"],
+        schedule=raw["schedule"],
+        grace_period=int(raw.get("grace_period", 60)),
+        command=raw.get("command"),
+    )
+
+
+def load_config(path: str | Path) -> CronWatcherConfig:
+    """Load and parse a YAML configuration file."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Config file not found: {p}")
+
+    with p.open() as fh:
+        raw = yaml.safe_load(fh) or {}
+
+    jobs = [_parse_job(j) for j in raw.get("jobs", [])]
+    alerts = _parse_alert(raw.get("alerts", {}))
 
     return CronWatcherConfig(
         jobs=jobs,
         alerts=alerts,
+        check_interval=int(raw.get("check_interval", 60)),
         log_level=raw.get("log_level", "INFO"),
-        state_file=raw.get("state_file", "/var/lib/cronwatcher/state.json"),
-        check_interval=raw.get("check_interval", 60),
     )
