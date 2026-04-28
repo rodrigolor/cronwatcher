@@ -49,6 +49,14 @@ class Report:
             ]
         return "\n".join(lines)
 
+    def failing_jobs(self) -> List[JobSummary]:
+        """Return summaries for jobs whose last run did not succeed."""
+        return [
+            summary
+            for summary in self.jobs.values()
+            if summary.last_status is not None and summary.last_status != "success"
+        ]
+
 
 class ReportGenerator:
     def __init__(self, store: HistoryStore) -> None:
