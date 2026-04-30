@@ -88,3 +88,11 @@ def test_multiple_jobs_independent(every_minute_job: JobConfig) -> None:
 
     assert "heartbeat" not in missed
     assert "backup" in missed
+
+
+def test_register_duplicate_job_raises(every_minute_job: JobConfig) -> None:
+    """Registering a job with a name that already exists should raise ValueError."""
+    s = Scheduler()
+    s.register(every_minute_job)
+    with pytest.raises(ValueError, match="heartbeat"):
+        s.register(every_minute_job)
