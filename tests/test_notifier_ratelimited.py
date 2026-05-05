@@ -85,3 +85,13 @@ def test_second_alert_allowed_within_limit(inner, policy):
     rln.notify_missed("job_a")
     rln.notify_missed("job_a")  # suppressed
     assert inner.notify_missed.call_count == 2
+
+
+def test_limiter_checked_with_correct_job_name(inner, policy):
+    """Ensure is_allowed is called with the job name, not a generic key."""
+    lim = _limiter_always_allow(policy)
+    rln = RateLimitedNotifier(inner, policy, limiter=lim)
+    rln.notify_missed("job_b")
+    rln.notify_failure("job_c", 1)
+    lim.is_allowed.assert_any_call("job_b")
+    lim.is_allowed.assert_any_call("job_c")
