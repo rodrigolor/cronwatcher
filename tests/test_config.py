@@ -93,3 +93,13 @@ def test_default_alert_fields(config_file):
     assert cfg.alerts.email is None
     assert cfg.alerts.slack_webhook is None
     assert cfg.alerts.pagerduty_key is None
+
+
+def test_job_default_fields(config_file):
+    """Verify that optional job fields are set to expected defaults."""
+    cfg = load_config(config_file(MINIMAL_CONFIG))
+    job = cfg.jobs[0]
+    assert job.timeout is None
+    assert job.alert_on_failure is True
+    assert job.alert_on_missed is True
+    assert job.notify_channels == []
