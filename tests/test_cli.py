@@ -73,3 +73,10 @@ def test_prune_max_age_override(tmp_path, config_file, store_with_records):
 def test_no_command_prints_help_returns_nonzero(capsys):
     result = main([])
     assert result == 1
+
+
+def test_prune_missing_config_returns_nonzero(tmp_path):
+    """Prune should return a non-zero exit code when the config file does not exist."""
+    nonexistent = tmp_path / "does_not_exist.yaml"
+    result = main(["prune", "--config", str(nonexistent)])
+    assert result != 0
