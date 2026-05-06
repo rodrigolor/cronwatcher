@@ -26,6 +26,9 @@ alert:
   enabled: false
   smtp_host: smtp.example.com
   smtp_port: 587
+  smtp_tls: true          # use STARTTLS (recommended)
+  smtp_user: ""           # leave blank if no auth required
+  smtp_password: ""       # leave blank if no auth required
   from_addr: cronwatcher@example.com
   recipients:
     - ops@example.com
