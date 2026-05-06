@@ -55,6 +55,15 @@ def test_export_json_empty_when_no_match(store: HistoryStore) -> None:
     assert data == []
 
 
+def test_export_json_timestamp_is_iso_format(store: HistoryStore) -> None:
+    """Timestamps in JSON output should be valid ISO-8601 strings."""
+    data = json.loads(export_history(store, fmt="json"))
+    for record in data:
+        # Should not raise ValueError if the timestamp is a valid ISO string.
+        parsed = datetime.fromisoformat(record["timestamp"])
+        assert parsed.tzinfo is not None, "Timestamp must be timezone-aware"
+
+
 # ---------------------------------------------------------------------------
 # export_csv
 # ---------------------------------------------------------------------------
