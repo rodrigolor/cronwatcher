@@ -41,6 +41,21 @@ def cmd_tags_filter(args: argparse.Namespace, config: CronWatcherConfig) -> int:
     return 0
 
 
+def cmd_tags_show(args: argparse.Namespace, config: CronWatcherConfig) -> int:
+    """Show the tags associated with a specific job."""
+    registry = _build_registry(config)
+    job_names = [job.name for job in config.jobs]
+    if args.job not in job_names:
+        print(f"Error: job '{args.job}' not found in configuration.", file=sys.stderr)
+        return 1
+    tags = sorted(registry.tags_for_job(args.job))
+    if not tags:
+        print(f"{args.job}: (no tags)")
+    else:
+        print(f"{args.job}: {', '.join(tags)}")
+    return 0
+
+
 def build_tags_parser(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     tags_parser = subparsers.add_parser("tags", help="Inspect job tags")
     tag_sub = tags_parser.add_subparsers(dest="tags_cmd", required=True)
@@ -53,4 +68,11 @@ def build_tags_parser(subparsers: argparse._SubParsersAction) -> None:  # type: 
         nargs="+",
         metavar="TAG",
         help="One or more tags to filter by",
+    )
+
+    show_p = tag_sub.add_parser("show", help="Show tags for a specific job")
+    show_p.add_argument(
+        "job",
+        metavar="JOB",
+        help="Name of the job to inspect",
     )
